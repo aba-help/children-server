@@ -29,7 +29,10 @@ app.use(cors({
 }));
 app.use(bodyParser.json());
 
-app.post("/register", register);
+// Accounts are issued manually (npm run create-user); self-registration is off unless ALLOW_REGISTRATION=true.
+if (process.env.ALLOW_REGISTRATION === "true") {
+  app.post("/register", register);
+}
 app.post("/login", login);
 app.get("/me", auth, me);
 app.patch("/me", auth, updateUser);

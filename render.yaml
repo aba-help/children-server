@@ -11,6 +11,10 @@ services:
         sync: false
       - key: PORT
         value: 10000
+      # Payments (WebPay) are off; set to "true" to mount /api/payment/* again
+      # (see child-app/src/config/featureFlags.ts for the full checklist).
+      - key: ENABLE_PAYMENTS
+        value: "false"
       - key: WEBPAY_STORE_ID
         sync: false
       - key: WEBPAY_SECRET_KEY

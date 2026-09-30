@@ -37,12 +37,18 @@ app.post("/login", login);
 app.get("/me", auth, me);
 app.patch("/me", auth, updateUser);
 
-app.post("/api/payment/create", auth, createPayment);
-app.get("/api/payment/form/:paymentId", servePaymentForm);
-app.get("/api/payment/status/:paymentId", auth, checkPaymentStatus);
-app.post("/api/payment/callback", paymentCallback);
-app.get("/api/payment/success", handlePaymentSuccess);
-app.get("/api/payment/cancel", handlePaymentCancel);
+// PAYMENTS (WebPay) ARE TEMPORARILY TURNED OFF: every signed-in user has full access.
+// To turn them back on set ENABLE_PAYMENTS=true (+ WEBPAY_STORE_ID, WEBPAY_SECRET_KEY,
+// WEBPAY_API_URL, PRODUCTION_URL) on Render and SHOW_PURCHASE_UI = true in
+// child-app/src/config/featureFlags.ts (full checklist there).
+if (process.env.ENABLE_PAYMENTS === "true") {
+  app.post("/api/payment/create", auth, createPayment);
+  app.get("/api/payment/form/:paymentId", servePaymentForm);
+  app.get("/api/payment/status/:paymentId", auth, checkPaymentStatus);
+  app.post("/api/payment/callback", paymentCallback);
+  app.get("/api/payment/success", handlePaymentSuccess);
+  app.get("/api/payment/cancel", handlePaymentCancel);
+}
 
 const port = Number(process.env.PORT ?? 4000);
 

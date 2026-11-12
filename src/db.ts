@@ -1,4 +1,5 @@
 import { Pool, PoolConfig, QueryResult, QueryResultRow } from "pg";
+import { SECTIONS } from "./sections";
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -53,6 +54,14 @@ export async function initDb() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `);
+
+	// per-section access (src/sections.ts). A new column is added with DEFAULT true, so the users
+	// that exist at that moment keep everything they had (until then every signed-in user saw
+	// all sections); then the default becomes false, so new users start with nothing open.
+	for (const { column } of SECTIONS) {
+		await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ${column} BOOLEAN NOT NULL DEFAULT true`);
+		await db.query(`ALTER TABLE users ALTER COLUMN ${column} SET DEFAULT false`);
+	}
 
 	console.log("✅ users table ensured");
 

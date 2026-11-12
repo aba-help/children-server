@@ -1,4 +1,5 @@
 import { query } from "../db";
+import { SECTIONS, SectionAccess, SectionId } from "../sections";
 import { User } from "../types";
 
 interface UserRow {
@@ -10,6 +11,8 @@ interface UserRow {
   open_categories: (number | string)[] | null;
   purchased_stages: (number | string)[] | null;
   created_at: string;
+  // plus one boolean access_<section> column per section (src/sections.ts)
+  [column: string]: unknown;
 }
 
 function mapUser(row: UserRow): User {
@@ -26,6 +29,9 @@ function mapUser(row: UserRow): User {
     avatar: row.avatar,
     open_categories: toNumberArray(row.open_categories),
     purchased_stages: toNumberArray(row.purchased_stages),
+    section_access: Object.fromEntries(
+      SECTIONS.map(({ id, column }) => [id, row[column] === true])
+    ) as SectionAccess,
     created_at: new Date(row.created_at).toISOString()
   };
 }
@@ -49,7 +55,14 @@ export async function findUserById(id: string): Promise<User | null> {
   return mapUser(result.rows[0]);
 }
 
-export async function insertUser(user: User): Promise<void> {
+/** All users, newest first (the admin page). */
+export async function listUsers(): Promise<User[]> {
+  const result = await query<UserRow>("SELECT * FROM users ORDER BY created_at DESC");
+  return result.rows.map(mapUser);
+}
+
+// new users get the column defaults: no section open
+export async function insertUser(user: Omit<User, "section_access">): Promise<void> {
   await query(
     `
       INSERT INTO users (id, email, password, user_name, avatar, open_categories, purchased_stages, created_at)
@@ -76,6 +89,29 @@ export async function updateUserById(id: string, updates: UpdateUserFields): Pro
 
   const assignments = entries.map(([field], index) => `${field} = $${index + 2}`);
   const values = entries.map(([, value]) => value);
+
+  const result = await query<UserRow>(
+    `UPDATE users SET ${assignments.join(", ")} WHERE id = $1 RETURNING *`,
+    [id, ...values]
+  );
+
+  if (result.rowCount === 0) return null;
+  return mapUser(result.rows[0]);
+}
+
+/** Opens / closes sections for a user; only the given sections change. */
+export async function setSectionAccess(
+  id: string,
+  access: Partial<Record<SectionId, boolean>>
+): Promise<User | null> {
+  // column names come from SECTIONS, never from the request
+  const entries = SECTIONS.filter(({ id: sectionId }) => typeof access[sectionId] === "boolean");
+  if (entries.length === 0) {
+    return findUserById(id);
+  }
+
+  const assignments = entries.map(({ column }, index) => `${column} = $${index + 2}`);
+  const values = entries.map(({ id: sectionId }) => access[sectionId]);
 
   const result = await query<UserRow>(
     `UPDATE users SET ${assignments.join(", ")} WHERE id = $1 RETURNING *`,

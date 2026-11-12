@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import { User } from "../types";
-import { findUserByEmail, insertUser } from "../models/user";
+import { findUserByEmail, findUserById, insertUser } from "../models/user";
 import { serializeUser } from "./serialize-user";
 import { JWT_SECRET, JWT_EXPIRES_IN } from "../config/jwt";
 
@@ -21,7 +21,7 @@ export async function register(req: Request, res: Response) {
 
 		const now = new Date().toISOString();
 
-		const user: User = {
+		const user: Omit<User, "section_access"> = {
 			id: crypto.randomUUID(),
 			email,
 			password,
@@ -35,6 +35,8 @@ export async function register(req: Request, res: Response) {
 		console.log("Creating user:", user);
 
 		await insertUser(user);
+		// read back: the section access columns come from their defaults (nothing open)
+		const created = (await findUserById(user.id)) as User;
 
 		// Generate JWT token
 		const token = jwt.sign(
@@ -46,7 +48,7 @@ export async function register(req: Request, res: Response) {
 		res.json({
 			message: "Registered",
 			token,
-			user: serializeUser(user),
+			user: serializeUser(created),
 		});
 	} catch (error) {
 		console.error("Failed to register user", error);

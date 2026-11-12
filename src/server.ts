@@ -9,6 +9,8 @@ import { auth } from "./middleware/auth";
 import { initDb } from "./db";
 import { updateUser } from "./routes/update-user";
 import {
+  adminCreateUser,
+  adminDeleteUser,
   adminListUsers,
   adminPage,
   adminSections,
@@ -48,6 +50,8 @@ app.patch("/me", auth, updateUser);
 app.get("/admin", adminPage);
 app.get("/admin/api/sections", auth, superAdminOnly, adminSections);
 app.get("/admin/api/users", auth, superAdminOnly, adminListUsers);
+app.post("/admin/api/users", auth, superAdminOnly, adminCreateUser);
+app.delete("/admin/api/users/:id", auth, superAdminOnly, adminDeleteUser);
 app.patch("/admin/api/users/:id/access", auth, superAdminOnly, adminSetAccess);
 
 // PAYMENTS (WebPay) ARE TEMPORARILY TURNED OFF: every signed-in user has full access.

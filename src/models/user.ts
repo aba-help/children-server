@@ -121,3 +121,9 @@ export async function setSectionAccess(
   if (result.rowCount === 0) return null;
   return mapUser(result.rows[0]);
 }
+
+/** Deletes the user; their payment records go first (payments.user_id references users). */
+export async function deleteUserById(id: string): Promise<void> {
+  await query("DELETE FROM payments WHERE user_id = $1", [id]);
+  await query("DELETE FROM users WHERE id = $1", [id]);
+}

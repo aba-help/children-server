@@ -8,6 +8,13 @@ import { me } from "./routes/me";
 import { auth } from "./middleware/auth";
 import { initDb } from "./db";
 import { updateUser } from "./routes/update-user";
+import {
+  adminListUsers,
+  adminPage,
+  adminSections,
+  adminSetAccess,
+  superAdminOnly,
+} from "./routes/admin";
 import { 
   createPayment,
   servePaymentForm,
@@ -36,6 +43,12 @@ if (process.env.ALLOW_REGISTRATION === "true") {
 app.post("/login", login);
 app.get("/me", auth, me);
 app.patch("/me", auth, updateUser);
+
+// admin page: which app sections are open for each user (super admins only)
+app.get("/admin", adminPage);
+app.get("/admin/api/sections", auth, superAdminOnly, adminSections);
+app.get("/admin/api/users", auth, superAdminOnly, adminListUsers);
+app.patch("/admin/api/users/:id/access", auth, superAdminOnly, adminSetAccess);
 
 // PAYMENTS (WebPay) ARE TEMPORARILY TURNED OFF: every signed-in user has full access.
 // To turn them back on set ENABLE_PAYMENTS=true (+ WEBPAY_STORE_ID, WEBPAY_SECRET_KEY,

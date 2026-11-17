@@ -10,5 +10,7 @@ export interface User {
   purchased_stages: number[];
   /** which app sections are open for the user (src/sections.ts) */
   section_access: SectionAccess;
+  /** parts opened on their own, e.g. "makatop:meAndMyFamily" (src/sections.ts PARTS) */
+  part_access: string[];
   created_at: string;
 }

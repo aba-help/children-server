@@ -1,5 +1,5 @@
 import { query } from "../db";
-import { SECTIONS, SectionAccess, SectionId } from "../sections";
+import { PARTS, SECTIONS, SectionAccess, SectionId, isPartId } from "../sections";
 import { User } from "../types";
 
 interface UserRow {
@@ -10,6 +10,7 @@ interface UserRow {
   avatar: string | null;
   open_categories: (number | string)[] | null;
   purchased_stages: (number | string)[] | null;
+  access_parts?: string[] | null;
   created_at: string;
   // plus one boolean access_<section> column per section (src/sections.ts)
   [column: string]: unknown;
@@ -32,6 +33,8 @@ function mapUser(row: UserRow): User {
     section_access: Object.fromEntries(
       SECTIONS.map(({ id, column }) => [id, row[column] === true])
     ) as SectionAccess,
+    // unknown ids (a part removed from the app) are dropped
+    part_access: (row.access_parts ?? []).filter(isPartId),
     created_at: new Date(row.created_at).toISOString()
   };
 }
@@ -62,7 +65,7 @@ export async function listUsers(): Promise<User[]> {
 }
 
 // new users get the column defaults: no section open
-export async function insertUser(user: Omit<User, "section_access">): Promise<void> {
+export async function insertUser(user: Omit<User, "section_access" | "part_access">): Promise<void> {
   await query(
     `
       INSERT INTO users (id, email, password, user_name, avatar, open_categories, purchased_stages, created_at)
@@ -118,6 +121,28 @@ export async function setSectionAccess(
     [id, ...values]
   );
 
+  if (result.rowCount === 0) return null;
+  return mapUser(result.rows[0]);
+}
+
+/** Opens / closes parts for a user; only the given parts change. Ids are checked by the caller. */
+export async function setPartAccess(
+  id: string,
+  changes: Record<string, boolean>
+): Promise<User | null> {
+  const user = await findUserById(id);
+  if (!user) return null;
+  const open = new Set(user.part_access);
+  for (const [part, value] of Object.entries(changes)) {
+    if (value) open.add(part);
+    else open.delete(part);
+  }
+  // stored in PARTS order, so the profile and the admin page list them the same way
+  const next = PARTS.map((part) => part.id).filter((part) => open.has(part));
+  const result = await query<UserRow>(
+    "UPDATE users SET access_parts = $2 WHERE id = $1 RETURNING *",
+    [id, next]
+  );
   if (result.rowCount === 0) return null;
   return mapUser(result.rows[0]);
 }

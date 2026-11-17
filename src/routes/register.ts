@@ -21,7 +21,7 @@ export async function register(req: Request, res: Response) {
 
 		const now = new Date().toISOString();
 
-		const user: Omit<User, "section_access"> = {
+		const user: Omit<User, "section_access" | "part_access"> = {
 			id: crypto.randomUUID(),
 			email,
 			password,

@@ -6,9 +6,10 @@ import {
   findUserById,
   insertUser,
   listUsers,
+  setPartAccess,
   setSectionAccess,
 } from "../models/user";
-import { SECTIONS, SectionId, isSectionId } from "../sections";
+import { PARTS, SECTIONS, SectionId, isPartId, isSectionId } from "../sections";
 import { User } from "../types";
 import { ADMIN_PAGE } from "./admin-page";
 import { isSuperAdminEmail } from "./serialize-user";
@@ -33,7 +34,7 @@ export function adminPage(_req: Request, res: Response) {
 }
 
 export async function adminSections(_req: Request, res: Response) {
-  res.json({ sections: SECTIONS.map(({ id, title }) => ({ id, title })) });
+  res.json({ sections: SECTIONS.map(({ id, title }) => ({ id, title })), parts: PARTS });
 }
 
 const adminUser = (user: User) => ({
@@ -43,6 +44,7 @@ const adminUser = (user: User) => ({
   createdAt: user.created_at,
   isSuperAdmin: isSuperAdminEmail(user.email),
   sectionAccess: user.section_access,
+  partAccess: user.part_access,
 });
 
 export async function adminListUsers(_req: Request, res: Response) {
@@ -138,6 +140,32 @@ export async function adminSetAccess(req: Request, res: Response) {
     res.json({ user: adminUser(updated) });
   } catch (error) {
     console.error("Failed to set section access", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+/** PATCH /admin/api/users/:id/parts  { partAccess: { "makatop:meAndMyFamily": true } } */
+export async function adminSetParts(req: Request, res: Response) {
+  const parts = req.body?.partAccess;
+  if (!parts || typeof parts !== "object" || Array.isArray(parts)) {
+    return res.status(400).json({ message: "partAccess object required" });
+  }
+  const changes: Record<string, boolean> = {};
+  for (const [key, value] of Object.entries(parts)) {
+    if (!isPartId(key) || typeof value !== "boolean") {
+      return res.status(400).json({ message: `Bad part or value: ${key}` });
+    }
+    changes[key] = value;
+  }
+
+  try {
+    const updated = await setPartAccess(req.params.id, changes);
+    if (!updated) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    res.json({ user: adminUser(updated) });
+  } catch (error) {
+    console.error("Failed to set part access", error);
     res.status(500).json({ message: "Internal server error" });
   }
 }

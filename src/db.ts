@@ -62,6 +62,8 @@ export async function initDb() {
 		await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ${column} BOOLEAN NOT NULL DEFAULT true`);
 		await db.query(`ALTER TABLE users ALTER COLUMN ${column} SET DEFAULT false`);
 	}
+	// parts opened on their own (Макатоп categories, Медиатека albums; src/sections.ts PARTS)
+	await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS access_parts TEXT[] NOT NULL DEFAULT '{}'`);
 
 	console.log("✅ users table ensured");
 

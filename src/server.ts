@@ -15,6 +15,7 @@ import {
   adminPage,
   adminSections,
   adminSetAccess,
+  adminSetParts,
   superAdminOnly,
 } from "./routes/admin";
 import { 
@@ -53,6 +54,7 @@ app.get("/admin/api/users", auth, superAdminOnly, adminListUsers);
 app.post("/admin/api/users", auth, superAdminOnly, adminCreateUser);
 app.delete("/admin/api/users/:id", auth, superAdminOnly, adminDeleteUser);
 app.patch("/admin/api/users/:id/access", auth, superAdminOnly, adminSetAccess);
+app.patch("/admin/api/users/:id/parts", auth, superAdminOnly, adminSetParts);
 
 // PAYMENTS (WebPay) ARE TEMPORARILY TURNED OFF: every signed-in user has full access.
 // To turn them back on set ENABLE_PAYMENTS=true (+ WEBPAY_STORE_ID, WEBPAY_SECRET_KEY,

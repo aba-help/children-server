@@ -22,6 +22,8 @@ export function serializeUser(user: User) {
     sectionAccess: isSuperAdmin
       ? (Object.fromEntries(SECTIONS.map(({ id }) => [id, true])) as SectionAccess)
       : user.section_access,
+    // Макатоп categories / Медиатека albums opened on their own (src/sections.ts PARTS)
+    partAccess: user.part_access,
     createdAt: user.created_at,
     isSuperAdmin
   };

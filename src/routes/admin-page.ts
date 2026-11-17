@@ -48,6 +48,14 @@ export const ADMIN_PAGE = String.raw`<!doctype html>
   #newUser .error { flex-basis: 100%; min-height: 0; }
   button.danger { color: #B4344E; border-color: #F1C6CF; }
   .hidden { display: none !important; }
+  tr.parts td { text-align: left; white-space: normal; background: #FBFDFC; }
+  /* stays at the left edge when the wide table is scrolled sideways */
+  .partGroups { display: flex; gap: 32px; flex-wrap: wrap; position: sticky; left: 10px; max-width: calc(100vw - 80px); }
+  .partGroup h4 { margin: 4px 0 8px; font-size: 14px; }
+  .partGroup .note { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+  .partGroup label { display: flex; align-items: center; gap: 8px; padding: 2px 0; font-size: 14px; }
+  .partGroup label.child { padding-left: 26px; }
+  .partGroup input[type=checkbox] { width: 16px; height: 16px; }
 </style>
 </head>
 <body>
@@ -80,7 +88,8 @@ export const ADMIN_PAGE = String.raw`<!doctype html>
     </div>
     <div class="wrap"><table id="users"></table></div>
     <p class="status">Новый пользователь создаётся без открытых разделов. Галочка - раздел открыт пользователю: все его платные части доступны. Изменения сохраняются сразу.
-      Суперадмины видят всё всегда.</p>
+      Суперадмины видят всё всегда.
+      В Макатопе и Медиатеке можно открыть отдельные категории и альбомы: кнопка «категории и альбомы» у пользователя.</p>
   </section>
 </main>
 <script>
@@ -90,6 +99,9 @@ export const ADMIN_PAGE = String.raw`<!doctype html>
   var token = sessionStorage.getItem(TOKEN_KEY);
   var sections = [];
   var users = [];
+  // Макатоп categories and Медиатека albums opened on their own; shown per user on demand
+  var parts = [];
+  var expanded = {};
   var $ = function (id) { return document.getElementById(id); };
 
   function el(tag, attrs, text) {
@@ -173,14 +185,74 @@ export const ADMIN_PAGE = String.raw`<!doctype html>
           actions.appendChild(b);
           actions.appendChild(document.createTextNode(" "));
         });
+        var partCount = (u.partAccess || []).length;
+        var more = el("button", { type: "button" }, (expanded[u.id] ? "▴ " : "▾ ") + "категории и альбомы" + (partCount ? " (" + partCount + ")" : ""));
+        more.addEventListener("click", function () { expanded[u.id] = !expanded[u.id]; render(); });
+        actions.appendChild(more);
+        actions.appendChild(document.createTextNode(" "));
         var del = el("button", { type: "button", "class": "danger" }, "удалить");
         del.addEventListener("click", function () { removeUser(u); });
         actions.appendChild(del);
       }
       tr.appendChild(actions);
       tbody.appendChild(tr);
+      if (expanded[u.id] && !u.isSuperAdmin) tbody.appendChild(partsRow(u));
     });
     table.appendChild(tbody);
+  }
+
+  // Макатоп: each category opens its songs and symbols. Медиатека: an album, or one sub-album.
+  // With the whole section ticked everything is open anyway, so the boxes are shown ticked + grey.
+  function partsRow(u) {
+    var tr = el("tr", { "class": "parts" });
+    var td = el("td", { colspan: String(sections.length + 2) });
+    var groups = el("div", { "class": "partGroups" });
+    var open = {};
+    (u.partAccess || []).forEach(function (id) { open[id] = true; });
+    sections.filter(function (s) {
+      return parts.some(function (p) { return p.section === s.id; });
+    }).forEach(function (s) {
+      var group = el("div", { "class": "partGroup" });
+      group.appendChild(el("h4", null, s.title));
+      var whole = !!u.sectionAccess[s.id];
+      group.appendChild(el("div", { "class": "note" }, whole
+        ? "Открыт весь раздел. Чтобы открыть только часть, снимите галочку раздела в таблице."
+        : "Без галочки в каждом списке открыто только первое видео."));
+      parts.filter(function (p) { return p.section === s.id; }).forEach(function (p) {
+        var label = el("label", { "class": p.parent ? "child" : "" });
+        var box = el("input", { type: "checkbox" });
+        // a sub-album is open when it or its whole album is ticked
+        var viaParent = p.parent && open[p.parent];
+        box.checked = whole || !!open[p.id] || !!viaParent;
+        box.disabled = whole || !!viaParent;
+        box.addEventListener("change", function () {
+          var change = {}; change[p.id] = box.checked;
+          saveParts(u, change);
+        });
+        label.appendChild(box);
+        label.appendChild(document.createTextNode(p.title));
+        group.appendChild(label);
+      });
+      groups.appendChild(group);
+    });
+    td.appendChild(groups);
+    tr.appendChild(td);
+    return tr;
+  }
+
+  function saveParts(user, change) {
+    setStatus("Сохраняю…");
+    api("PATCH", "/admin/api/users/" + encodeURIComponent(user.id) + "/parts", { partAccess: change })
+      .then(function (data) {
+        users = users.map(function (u) { return u.id === data.user.id ? data.user : u; });
+        render();
+        setStatus("Сохранено: " + user.email);
+      })
+      .catch(function (err) {
+        if (err.message === "auth") return;
+        render();
+        setStatus("Не сохранилось: " + err.message);
+      });
   }
 
   function save(user, change) {
@@ -215,6 +287,7 @@ export const ADMIN_PAGE = String.raw`<!doctype html>
     return Promise.all([api("GET", "/admin/api/sections"), api("GET", "/admin/api/users")])
       .then(function (results) {
         sections = results[0].sections;
+        parts = results[0].parts || [];
         users = results[1].users;
         $("login").classList.add("hidden");
         $("admin").classList.remove("hidden");

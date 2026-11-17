@@ -18,6 +18,13 @@ import {
   adminSetParts,
   superAdminOnly,
 } from "./routes/admin";
+import {
+  accessRequestChallenge,
+  adminDeleteAccessRequest,
+  adminListAccessRequests,
+  adminSetAccessRequestStatus,
+  createAccessRequest,
+} from "./routes/access-request";
 import { 
   createPayment,
   servePaymentForm,
@@ -55,6 +62,13 @@ app.post("/admin/api/users", auth, superAdminOnly, adminCreateUser);
 app.delete("/admin/api/users/:id", auth, superAdminOnly, adminDeleteUser);
 app.patch("/admin/api/users/:id/access", auth, superAdminOnly, adminSetAccess);
 app.patch("/admin/api/users/:id/parts", auth, superAdminOnly, adminSetParts);
+
+// «ПОЛУЧИТЬ ДОСТУП» form in the app (no account needed) and the requests on the admin page
+app.get("/access-requests/challenge", accessRequestChallenge);
+app.post("/access-requests", createAccessRequest);
+app.get("/admin/api/access-requests", auth, superAdminOnly, adminListAccessRequests);
+app.patch("/admin/api/access-requests/:id", auth, superAdminOnly, adminSetAccessRequestStatus);
+app.delete("/admin/api/access-requests/:id", auth, superAdminOnly, adminDeleteAccessRequest);
 
 // PAYMENTS (WebPay) ARE TEMPORARILY TURNED OFF: every signed-in user has full access.
 // To turn them back on set ENABLE_PAYMENTS=true (+ WEBPAY_STORE_ID, WEBPAY_SECRET_KEY,

@@ -10,7 +10,7 @@ export const ADMIN_PAGE = String.raw`<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>АВАша - доступ к разделам</title>
+<title>АВАша - доступ к разделам и заявки</title>
 <style>
   :root { --green: #11704D; --bg: #F8FAFC; --line: #E5E7EB; --text: #1F2937; --muted: #6B7280; }
   * { box-sizing: border-box; }
@@ -56,6 +56,18 @@ export const ADMIN_PAGE = String.raw`<!doctype html>
   .partGroup label { display: flex; align-items: center; gap: 8px; padding: 2px 0; font-size: 14px; }
   .partGroup label.child { padding-left: 26px; }
   .partGroup input[type=checkbox] { width: 16px; height: 16px; }
+  #requests { margin-bottom: 16px; padding: 14px 16px; }
+  #requests .head { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+  #requests h3 { margin: 0; font-size: 15px; }
+  #requests .count { background: #FDE68A; color: #92400E; border-radius: 999px; padding: 1px 8px; font-size: 13px; font-weight: 600; }
+  #requests .mailNote { color: var(--muted); font-size: 13px; }
+  #requests .mailNote.warn { color: #B45309; }
+  #requests table td, #requests table th { text-align: left; white-space: normal; }
+  #requests td.row-actions { min-width: 220px; }
+  #requests td.row-actions button { margin: 2px 0; }
+  #requests tr.done td { color: var(--muted); }
+  #requests .empty { color: var(--muted); font-size: 14px; padding: 4px 0; }
+  #requests .mailErr { color: #B4344E; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -74,6 +86,15 @@ export const ADMIN_PAGE = String.raw`<!doctype html>
   </form>
 
   <section id="admin" class="hidden">
+    <div id="requests" class="card">
+      <div class="head">
+        <h3>Заявки на доступ</h3>
+        <span id="reqCount" class="count hidden"></span>
+        <label class="mailNote"><input id="showDone" type="checkbox" style="width:14px;height:14px"> показать обработанные</label>
+        <span id="mailNote" class="mailNote"></span>
+      </div>
+      <div class="wrap"><table id="reqTable"></table></div>
+    </div>
     <form id="newUser" class="card">
       <h3>Новый пользователь</h3>
       <input id="newEmail" type="email" placeholder="Email" autocomplete="off" required>
@@ -102,6 +123,9 @@ export const ADMIN_PAGE = String.raw`<!doctype html>
   // Макатоп categories and Медиатека albums opened on their own; shown per user on demand
   var parts = [];
   var expanded = {};
+  // «ПОЛУЧИТЬ ДОСТУП» requests from the app
+  var requests = [];
+  var mail = null;
   var $ = function (id) { return document.getElementById(id); };
 
   function el(tag, attrs, text) {
@@ -282,13 +306,97 @@ export const ADMIN_PAGE = String.raw`<!doctype html>
       .catch(function (err) { if (err.message !== "auth") setStatus("Не удалилось: " + err.message); });
   }
 
+  function sectionTitle(id) {
+    var s = sections.filter(function (x) { return x.id === id; })[0];
+    return s ? s.title : id;
+  }
+
+  function renderRequests() {
+    var fresh = requests.filter(function (r) { return r.status === "new"; }).length;
+    $("reqCount").textContent = "новых: " + fresh;
+    $("reqCount").classList.toggle("hidden", !fresh);
+    var note = $("mailNote");
+    if (mail && mail.configured) {
+      note.textContent = "Письма о заявках уходят на " + mail.recipients.join(", ");
+      note.classList.remove("warn");
+    } else {
+      note.textContent = "Почта не настроена: заявки видны только здесь";
+      note.classList.add("warn");
+    }
+    var showDone = $("showDone").checked;
+    var list = requests.filter(function (r) { return showDone || r.status === "new"; });
+    var table = $("reqTable");
+    table.textContent = "";
+    if (!list.length) {
+      var row = el("tr"); row.appendChild(el("td", { "class": "empty" }, showDone ? "Заявок нет" : "Новых заявок нет"));
+      table.appendChild(row);
+      return;
+    }
+    var head = el("tr");
+    ["Дата", "Имя", "Email", "Телефон", "Раздел", "Язык", ""].forEach(function (t) { head.appendChild(el("th", null, t)); });
+    var thead = el("thead"); thead.appendChild(head); table.appendChild(thead);
+    var tbody = el("tbody");
+    list.forEach(function (r) {
+      var tr = el("tr", { "class": r.status === "done" ? "done" : "" });
+      tr.appendChild(el("td", null, new Date(r.createdAt).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" })));
+      tr.appendChild(el("td", null, r.name));
+      var mailTd = el("td");
+      var link = el("a", { href: "mailto:" + r.email }, r.email);
+      mailTd.appendChild(link);
+      if (r.mailError && mail && mail.configured) mailTd.appendChild(el("div", { "class": "mailErr", title: r.mailError }, "письмо не ушло"));
+      tr.appendChild(mailTd);
+      tr.appendChild(el("td", null, r.phone || "—"));
+      tr.appendChild(el("td", null, sectionTitle(r.section)));
+      tr.appendChild(el("td", null, r.lang === "en" ? "англ." : "рус."));
+      var actions = el("td", { "class": "row-actions" });
+      var exists = users.some(function (u) { return u.email.toLowerCase() === r.email.toLowerCase(); });
+      if (!exists) {
+        var create = el("button", { type: "button" }, "создать пользователя");
+        create.addEventListener("click", function () {
+          $("newEmail").value = r.email;
+          $("newName").value = r.name;
+          $("newPassword").focus();
+          setStatus("Придумайте пароль и нажмите «Создать», потом отметьте разделы.");
+        });
+        actions.appendChild(create);
+        actions.appendChild(document.createTextNode(" "));
+      } else {
+        actions.appendChild(el("span", { "class": "badge" }, "уже пользователь"));
+        actions.appendChild(document.createTextNode(" "));
+      }
+      var toggle = el("button", { type: "button" }, r.status === "new" ? "обработано" : "вернуть в новые");
+      toggle.addEventListener("click", function () {
+        var status = r.status === "new" ? "done" : "new";
+        api("PATCH", "/admin/api/access-requests/" + encodeURIComponent(r.id), { status: status })
+          .then(function () { r.status = status; renderRequests(); })
+          .catch(function (err) { if (err.message !== "auth") setStatus("Не сохранилось: " + err.message); });
+      });
+      actions.appendChild(toggle);
+      actions.appendChild(document.createTextNode(" "));
+      var del = el("button", { type: "button", "class": "danger" }, "удалить");
+      del.addEventListener("click", function () {
+        if (!confirm("Удалить заявку " + r.email + "?")) return;
+        api("DELETE", "/admin/api/access-requests/" + encodeURIComponent(r.id))
+          .then(function () { requests = requests.filter(function (x) { return x.id !== r.id; }); renderRequests(); })
+          .catch(function (err) { if (err.message !== "auth") setStatus("Не удалилось: " + err.message); });
+      });
+      actions.appendChild(del);
+      tr.appendChild(actions);
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+  }
+
   function load() {
     setStatus("Загружаю…");
-    return Promise.all([api("GET", "/admin/api/sections"), api("GET", "/admin/api/users")])
+    return Promise.all([api("GET", "/admin/api/sections"), api("GET", "/admin/api/users"), api("GET", "/admin/api/access-requests")])
       .then(function (results) {
         sections = results[0].sections;
         parts = results[0].parts || [];
         users = results[1].users;
+        requests = results[2].requests || [];
+        mail = results[2].mail || null;
+        renderRequests();
         $("login").classList.add("hidden");
         $("admin").classList.remove("hidden");
         $("logout").classList.remove("hidden");
@@ -330,6 +438,7 @@ export const ADMIN_PAGE = String.raw`<!doctype html>
       users = [data.user].concat(users);
       $("newEmail").value = ""; $("newPassword").value = ""; $("newName").value = "";
       render();
+      renderRequests();
       setStatus("Создан: " + data.user.email + ". Отметьте ему разделы.");
     }).catch(function (err) {
       if (err.message !== "auth") $("newUserError").textContent = err.message;
@@ -338,6 +447,7 @@ export const ADMIN_PAGE = String.raw`<!doctype html>
 
   $("logout").addEventListener("click", function () { signOut(""); });
   $("search").addEventListener("input", render);
+  $("showDone").addEventListener("change", renderRequests);
 
   if (token) {
     $("who").textContent = sessionStorage.getItem(EMAIL_KEY) || "";

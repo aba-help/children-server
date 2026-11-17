@@ -67,6 +67,22 @@ export async function initDb() {
 
 	console.log("✅ users table ensured");
 
+	// «ПОЛУЧИТЬ ДОСТУП» requests (src/routes/access-request.ts): not users, a separate table
+	await db.query(`
+    CREATE TABLE IF NOT EXISTS access_requests (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      phone TEXT,
+      section TEXT NOT NULL,
+      lang TEXT NOT NULL,
+      ip TEXT,
+      status TEXT NOT NULL DEFAULT 'new',
+      mail_error TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+
 	await db.query(`
     CREATE TABLE IF NOT EXISTS payments (
       id UUID PRIMARY KEY,
